@@ -1,0 +1,6 @@
+{
+  "name": "flymind",
+  "private": true,
+  "version": "1.0.0",
+  "description": "FLYMIND browser game with Render WebSocket multiplayer"
+}
