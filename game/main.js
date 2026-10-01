@@ -29,12 +29,19 @@ function setupMenu(){
  $('reward').onclick=async()=>{const r=await showRewarded();setAdStatus(r.ok?`REWARDED +${adConfig().coinsPerReward||100} • ${r.count}/10`:adReason(r.reason));}
  $('adSettings').onclick=()=>showPanel('adsPanel');$('settingsBtn').onclick=()=>showPanel('settingsPanel');$('saveRender').onclick=()=>{localStorage.setItem('fm_render_url',$('renderUrl').value.trim());hidePanels();};$('closeSettings').onclick=()=>hidePanels();$('hideMenu').onclick=()=>hidePanels();$('renderUrl').value=localStorage.getItem('fm_render_url')||window.FLYMIND_RENDER_URL;
  $('settings').addEventListener('change',()=>saveSettings());$('mouse').oninput=saveSettings;$('touch').oninput=saveSettings;$('vol').oninput=saveSettings;$('crt').oninput=saveSettings;$('tts').oninput=saveSettings;
- $('brain').onclick=()=>document.body.classList.toggle('brain-on');$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'RESUME':'PAUSE'};
+ $('brain').onclick=()=>document.body.classList.toggle('brain-on');
+ $('pause').onclick=()=>togglePause();
+ $('pausePanel').innerHTML='<div class="box" style="text-align:center"><h2 class="title" style="font-size:42px">PAUSED</h2><p class="tiny">FLYMIND GARDEN</p><div class="menuBtns"><button class="btn primary" id="resumeGame">RESUME</button><button class="btn" id="switchMulti">SWITCH TO MULTIPLAYER</button><button class="btn" id="pauseMenu">MAIN MENU</button></div></div>';
+ $('resumeGame').onclick=()=>togglePause();
+ $('switchMulti').onclick=()=>{paused=false;hidePanels();openMulti();};
+ $('pauseMenu').onclick=()=>{paused=false;running=false;mp.disconnect();voice.disable();hidePanels();$('menu').classList.remove('hidden');};
+
 }
 function saveSettings(){settings.mouse=+$('mouse').value;settings.touch=+$('touch').value;settings.vol=+$('vol').value;settings.crt=$('crt').checked;settings.tts=$('tts').checked;localStorage.setItem('fm_mouse',settings.mouse);localStorage.setItem('fm_touch',settings.touch);localStorage.setItem('fm_vol',settings.vol);localStorage.setItem('fm_crt',settings.crt?'1':'0');localStorage.setItem('fm_tts',settings.tts?'1':'0');applyCrt()}
 function applyCrt(){$('stage').classList.toggle('crt',settings.crt)}
 function randomRoom(){return 'FLY-'+Math.random().toString(36).slice(2,6).toUpperCase()}
 function start(isMulti){
+ if(multiplayer && !isMulti){mp.disconnect();voice.disable();}
  playerName=($('name').value||'Fly').trim().slice(0,16)||'Fly';localStorage.setItem('fm_name',playerName);multiplayer=isMulti;setupWorld();$('menu').classList.add('hidden');running=true;paused=false;last=performance.now();requestAnimationFrame(loop);
  if(isMulti){$('roomPanel').classList.remove('hidden');}else{$('roomPanel').classList.add('hidden');}
 }
@@ -44,7 +51,7 @@ function joinMulti(){
  const n=($('mpName').value||$('name').value||'Fly').trim().slice(0,16)||'Fly';const code=($('room').value||randomRoom()).trim().toUpperCase();playerName=n;$('name').value=n;localStorage.setItem('fm_name',n);$('multiModal').classList.add('hidden');start(true);setTimeout(()=>mp.connect(code,n),60);
 }
 function setupWorld(){
- time=0;brainAcc=0;nectar=0;energy=80;hp=100;score=0;signal='EXPLORE';lastSpoken=0;human={x:190,z:190,mode:'patrol',thought:'Searching...',target:null,miss:0,wait:0,hand:{x:200,y:55,z:190}};
+ time=0;brainAcc=0;nectar=0;energy=100;hp=100;score=0;signal='EXPLORE';lastSpoken=0;human={x:190,z:190,mode:'patrol',thought:'Searching...',target:null,miss:0,wait:0,hand:{x:200,y:55,z:190}};
  flies=[makeFly(0,true)];for(let i=1;i<15;i++)flies.push(makeFly(i,false));flowers=Array.from({length:34},()=>({x:R()*580-290,z:R()*580-290,h:12+R()*20,nectar:60+R()*40,c:R()}));wasps=Array.from({length:2},()=>({x:R()*500-250,z:R()*500-250,y:14,hp:100}));rocks=Array.from({length:90},()=>({x:R()*600-300,z:R()*600-300,r:2+R()*5}));brain.reset();brain.ensure(flies.map(f=>({id:f.id,personality:f.pers})));remote.clear();
 }
 function makeFly(id,isP){const p=[{name:'cautious',gain:1.4,threshold:.9,aggression:.3,social:1,food:1},{name:'aggressive',gain:1,threshold:1,aggression:2,social:.6,food:1},{name:'social',gain:1,threshold:1,aggression:.6,social:2,food:1},{name:'curious',gain:.9,threshold:1.05,aggression:.7,social:.8,food:1.3},{name:'forager',gain:1,threshold:1,aggression:.5,social:.8,food:1.7}][id%5];return{id,pers:p,x:R()*520-260,z:R()*520-260,y:8+R()*15,yaw:R()*TAU,vx:0,vz:0,vy:0,energy:70+R()*20,hp:100,nectar:0,signal:'EXPLORE',feeding:0,isP}}
@@ -59,7 +66,7 @@ const signalValue=s=>({DANGER:.8,RUN:1,ASSEMBLE:.6,ATTACK:.7,HELP:.8}[s]||0);con
 function neuralStep(dt){const inp=flies.map(f=>({id:f.id,personality:f.pers,input:sense(f)}));brain.tick(inp);for(const f of flies){const o=brain.get(f.id);f.brain=o;f.signal=o.escape>.78?'RUN':o.escape>.5?'DANGER':o.attack>.55?'ATTACK':o.social>.55?'ASSEMBLE':o.approach>.55?'FOOD':o.freeze>.55?'HIDE':'EXPLORE';if(f.isP&&f.signal!==signal){signal=f.signal;speak(signal)}}}
 function speak(s){if(!settings.tts||!speechSynthesis||time-lastSpoken<3)return;const words={RUN:'Run!',DANGER:'Danger.',ASSEMBLE:'Assemble.',ATTACK:'Attack!',FOOD:'Nectar.',HIDE:'Hide.',HELP:'Help!'};if(!words[s])return;lastSpoken=time;const u=new SpeechSynthesisUtterance(words[s]);u.rate=1.05;u.pitch=.65;speechSynthesis.speak(u)}
 function update(dt){
- if(!running||paused)return;time+=dt;energy-=dt*.8;if(energy<=0){energy=0;hp-=dt*4}if(hp<=0){gameOver();return}
+ if(!running||paused)return;time+=dt;energy-=dt*.45;if(energy<=0){energy=0;hp-=dt*2}if(hp<=0){gameOver();return}
  brainAcc+=dt;if(brainAcc>=0.05){brainAcc=0;neuralStep(dt);}
  const p=flies[0];const o=p.brain||{};let turn=o.turn||0,thrust=o.thrust||.45;if(keys.has('KeyA'))turn-=1;if(keys.has('KeyD'))turn+=1;if(keys.has('KeyW'))thrust+=.8;if(keys.has('KeyS'))thrust-=.5;if(touch.active){turn+=touch.x*1.2;thrust+=-touch.y*.9}
  p.yaw+=cl(turn,-1,1)*2.9*dt;p.vx=Math.sin(p.yaw)*thrust*26;p.vz=Math.cos(p.yaw)*thrust*26;p.vy=(keys.has('Space')?18:0)+(keys.has('ShiftLeft')?-18:0)+(o.up||0)*8;p.x+=p.vx*dt;p.z+=p.vz*dt;p.y=cl(p.y+p.vy*dt,1,42);p.x=cl(p.x,-290,290);p.z=cl(p.z,-290,290);p.energy=energy;p.hp=hp;
@@ -91,11 +98,17 @@ function draw(){ctx.clearRect(0,0,W,H);const sky=ctx.createLinearGradient(0,0,0,
 function drawBrain(){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(2,H-82,90,78);ctx.fillStyle='#fff';ctx.font='6px monospace';ctx.fillText('LIF BRAIN / WORKER',4,H-75);const b=flies[0].brain||{};['escape','attack','social','approach','freeze'].forEach((n,i)=>{ctx.fillText(n.toUpperCase(),4,H-65+i*10);ctx.fillStyle='#5f8';ctx.fillRect(35,H-69+i*10,45*cl(b[n]||0,0,1),5);ctx.fillStyle='#fff'});}
 function drawTitleHint(){ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.fillText('CLICK PLAY • SURVIVE • FIND NECTAR • ESCAPE THE HAND',4,H-4)}
 function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;update(dt);draw();if(running)requestAnimationFrame(loop);}
+function togglePause(){
+ if(!running)return;
+ paused=!paused;
+ $('pause').textContent=paused?'RESUME':'PAUSE';
+ $('pausePanel').classList.toggle('hidden',!paused);
+}
 function hidePanels(){document.querySelectorAll('.panel').forEach(x=>x.classList.add('hidden'))}
 function showPanel(id){hidePanels();$(id).classList.remove('hidden')}
 function setAdStatus(t){$('adStatus').textContent=t}
 function adReason(r){return({DAILY_LIMIT:'10 REWARDED ADS USED TODAY',NOT_CONFIGURED:'REWARDED ADS NOT CONFIGURED',NOT_COMPLETED:'AD NOT COMPLETED',FAILED:'AD FAILED'})[r]||'NO REWARD'}
-window.addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Escape'){paused=!paused;$('pause').textContent=paused?'RESUME':'PAUSE'}});window.addEventListener('keyup',e=>keys.delete(e.code));
+window.addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Escape')togglePause();});window.addEventListener('keyup',e=>keys.delete(e.code));
 canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointerLocked=true;});canvas.addEventListener('pointermove',e=>{if(!running)return;if(e.buttons){flies[0].yaw+=e.movementX*.0025*settings.mouse}});canvas.addEventListener('pointerup',()=>pointerLocked=false);
 let joyEl=$('joy');joyEl.addEventListener('pointerdown',e=>{touch.active=true;joyEl.setPointerCapture(e.pointerId);});joyEl.addEventListener('pointermove',e=>{if(!touch.active)return;const r=joyEl.getBoundingClientRect();touch.x=cl((e.clientX-(r.left+r.width/2))/(r.width*.45),-1,1);touch.y=cl((e.clientY-(r.top+r.height/2))/(r.height*.45),-1,1)});['pointerup','pointercancel'].forEach(k=>joyEl.addEventListener(k,()=>{touch.active=false;touch.x=touch.y=0}));
 $('tAttack').onclick=()=>{$('attack').click()};$('tEat').onclick=()=>{$('eat').click()};$('tUp').onpointerdown=()=>keys.add('Space');$('tUp').onpointerup=()=>keys.delete('Space');$('tDown').onpointerdown=()=>keys.add('ShiftLeft');$('tDown').onpointerup=()=>keys.delete('ShiftLeft');
