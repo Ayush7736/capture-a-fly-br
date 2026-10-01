@@ -159,8 +159,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         if room is None or not await room.add(newpeer):
             await websocket.send_json({"type":"error","message":"Room is full."});await websocket.close(code=1013);return
         peer=newpeer
-        await websocket.send_json({"type":"welcome","room":code,"self":{"id":pid,"name":name},"peers":[p for p in await room.snapshot() if p["id"]!=pid]})
-        await room.send_all({"type":"peer-joined","peer":{"id":pid,"name":name}},exclude=pid)
+        peers=[p for p in await room.snapshot() if p["id"]!=pid]
+        await websocket.send_json({"type":"welcome","room":code,"self":{"id":pid,"name":name},"peers":peers,"count":len(peers)+1})
+        print(f"FLYMIND JOIN room={code} name={name} count={len(peers)+1}",flush=True)
+        await room.send_all({"type":"peer-joined","peer":{"id":pid,"name":name},"count":len(peers)+1},exclude=pid)
         while True:
             msg=json.loads(await websocket.receive_text());typ=msg.get("type")
             if typ=="ping":await websocket.send_json({"type":"pong","t":time.time()});continue
@@ -177,7 +179,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         except Exception:pass
     finally:
         if room and peer:
-            await room.remove(peer.pid);await room.send_all({"type":"peer-left","id":peer.pid},exclude=peer.pid);await cleanup_room(room.code)
+            await room.remove(peer.pid)
+            print(f"FLYMIND LEAVE room={room.code} name={peer.name} count={len(room.peers)}",flush=True)
+            await room.send_all({"type":"peer-left","id":peer.pid,"count":len(room.peers)},exclude=peer.pid)
+            await cleanup_room(room.code)
 
 @app.get("/manifest.webmanifest")
 async def manifest():return FileResponse(BASE/"manifest.webmanifest")
