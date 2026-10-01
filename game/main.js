@@ -27,7 +27,7 @@ function setStatus(s){$('mpStatus').textContent=s}
 function setVoiceStatus(s){$('voiceStatus').textContent=s}
 function setupMenu(){
  $('name').value=playerName;$('mouse').value=settings.mouse;$('touch').value=settings.touch;$('vol').value=settings.vol;$('crt').checked=settings.crt;$('tts').checked=settings.tts;
- $('play').onclick=()=>start(false);$('multi').onclick=()=>openMulti();$('closeMulti').onclick=closeMulti;$('join').onclick=joinMulti;$('create').onclick=()=>{$('room').value=randomRoom();joinMulti()};
+ $('play').onclick=()=>start(false);$('multi').onclick=()=>openMulti();$('closeMulti').onclick=closeMulti;$('join').onclick=joinMulti;$('create').onclick=async()=>{const code=randomRoom();$('room').value=code;try{await navigator.clipboard.writeText(code)}catch{};joinMulti();setTimeout(()=>setStatus('HOST ROOM '+code+' • SHARE THIS CODE'),250)};
  $('voiceOn').onclick=async()=>{if(!voice.enabled)await voice.enable();else voice.disable();$('voiceOn').textContent=voice.enabled?'MIC OFF':'MIC ON'};
  $('copyRoom').onclick=async()=>{try{await navigator.clipboard.writeText(mp.room)}catch{}};
  $('reward').onclick=async()=>{const r=await showRewarded();setAdStatus(r.ok?`REWARDED +${adConfig().coinsPerReward||100} • ${r.count}/10`:adReason(r.reason));}
