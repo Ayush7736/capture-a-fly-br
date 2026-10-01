@@ -1,0 +1,27 @@
+name: Validate backend
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: |
+          for f in game/*.js api/*.js; do node --check "$f"; done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - name: Check Python syntax
+        run: python -m py_compile backend/main.py
+      - name: Validate JSON config
+        run: |
+          python -m json.tool manifest.webmanifest >/dev/null
+          python -m json.tool package.json >/dev/null
+          python -m json.tool vercel.json >/dev/null
