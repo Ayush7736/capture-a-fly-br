@@ -21,6 +21,7 @@ import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
@@ -186,3 +187,6 @@ async def robots():return FileResponse(BASE/"robots.txt")
 async def sitemap():return FileResponse(BASE/"sitemap.xml")
 @app.get("/")
 async def index():return FileResponse(BASE/"index.html")
+
+# Serve browser game modules from Render. API/WebSocket routes above remain explicit.
+app.mount('/game', StaticFiles(directory=BASE / 'game'), name='game')
