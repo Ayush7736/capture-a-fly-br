@@ -1,112 +1,61 @@
-# FLYMIND — NEURAL GARDEN (patched build)
+# FLYMIND — NEURAL GARDEN
 
-A low-end retro browser game where you are the fly. The fly brain runs in a Web Worker; Render handles lightweight multiplayer rooms, WebSocket state relay, and WebRTC voice signaling; Vercel hosts the frontend and secure OpenRouter NPC proxy.
+FLYMIND is a lightweight retro browser survival game where you are the fly.
 
-## What was fixed
-- Corrected the Render entry point to `backend.main:app` with a real `backend/` package.
-- Corrected the Vercel layout: root `index.html`, `game/` assets, `api/npc.js` function.
-- Added Render WebSocket multiplayer with room codes, custom names, presence and state relay.
-- Added browser WebRTC voice chat signaled through the Render WebSocket service.
-- Moved the compact LIF fly brain into `game/brain.worker.js` so it does not block rendering.
-- Added mobile touch controls and a stronger retro UI.
-- Added OpenRouter NPC proxy with local fallback and no client-side secret.
-- Added Google H5 Games Ads integration hooks with a safe disabled-until-configured state.
-- Added robots.txt, sitemap.xml and manifest.
+## Final architecture
 
-## Run locally
-### All-in-one Render-style game
-```bash
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn backend.main:app --host 127.0.0.1 --port 8000
-```
-Open `http://127.0.0.1:8000/` for the game if you choose to add a root static mount, or use a static server for the frontend.
+- `capture-a-fly-fr`: static browser client, deployed to Vercel.
+- `capture-a-fly-br`: FastAPI backend, WebSocket rooms, WebRTC signaling, score API, and optional OpenRouter NPC planning, deployed to Render.
+- The fly simulation and rendering stay in the browser. No per-frame neural inference runs on Render.
+- Voice audio stays peer-to-peer through browser WebRTC; Render relays signaling messages.
 
-### Frontend-only
-```bash
-python -m http.server 4173
-```
-Open `http://127.0.0.1:4173/`.
-Set `window.FLYMIND_RENDER_URL` near the top of `index.html` to your Render URL before multiplayer.
+## Render deployment
 
-## Render multiplayer
-Render web services accept inbound WebSocket connections. The backend exposes `/ws` and uses one in-memory room registry per service instance.
+This repository is a Render Web Service.
 
-Set `FLYMIND_ORIGINS` to the Vercel origin, for example:
-```text
-https://your-game.vercel.app
-```
-Set `FLYMIND_MAX_PLAYERS=8` for small low-cost rooms.
+Build command:
+`pip install -r requirements.txt`
 
-Because rooms are in memory, do not scale this service horizontally until you add shared room state (Redis or another shared broker). Clients reconnect after interruptions.
+Start command:
+`uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 
-## Vercel
-Deploy the repository root as a Vercel project. `api/npc.js` becomes `/api/npc` automatically.
+The blueprint pins the optional NPC model to:
+`qwen/qwen3.8-27b:free`
 
-Environment variables:
-```text
-OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=your-chosen-model
-ALLOW_ORIGIN=https://your-game.vercel.app
-```
-Never put the OpenRouter key in browser code.
+Set the secret on Render only:
+`OPENROUTER_API_KEY=...`
 
-## OpenRouter NPC
-The browser sends a compact world snapshot to `/api/npc`. The Vercel function calls OpenRouter and returns a validated high-level human intention. If the API is missing, rate-limited, times out, or returns invalid JSON, the local deterministic planner keeps the game running.
+The public frontend is already configured for:
+`https://capture-a-fly.onrender.com`
 
-## Voice chat
-Voice media uses browser WebRTC. Render only relays signaling messages (`offer`, `answer`, ICE candidates); it does not process microphone audio. A STUN server is configured for NAT discovery. Some restrictive networks may still require a TURN server for reliable connectivity.
+## Endpoints
 
-The client uses a small full-mesh voice topology, so the multiplayer room size is intentionally capped at 8.
+- `GET /api/health` — health check
+- `GET /api/best` — current local best score
+- `POST /api/best` — save a best survival time
+- `POST /api/npc` — validated high-level human hunter plan
+- `WS /ws` — rooms, player state relay, chat, and WebRTC signaling
 
-## Ads
-The code includes an optional Google H5 Games Ads adapter in `game/ads.js`.
+## Multiplayer notes
 
-Edit in `index.html` after you are approved/configured:
-```js
-window.FLYMIND_ADS={
-  publisherId:"ca-pub-REPLACE_ME",
-  test:true,
-  maxRewardedPerDay:10,
-  coinsPerReward:100
-};
-```
-The current build keeps ads inactive while the publisher ID is blank. Only completed rewarded placements grant in-game coins. Do not reward ordinary display-ad views or ask players to click ads.
+Rooms are stored in memory on the Render instance and are capped for lightweight use. The client reconnects with exponential backoff.
 
-Google's H5 Games Ads product supports interstitial and rewarded formats for HTML5 games. Configure the official H5 Games Ad Placement API and your publisher account before production.
+Do not scale this backend across multiple instances unless you add shared room state (for example Redis). WebRTC voice uses a small full-mesh topology and is intended for small rooms.
 
-## Search Console
-Replace `YOUR-DOMAIN.example` in `public/robots.txt` and `public/sitemap.xml`, deploy, then verify the site in Google Search Console and submit the sitemap.
+## Security
+
+Never commit `OPENROUTER_API_KEY` or any other secret. The frontend never receives the OpenRouter key.
 
 ## Scientific honesty
-- REAL: selected Drosophila circuit names/motifs can be used as references.
-- BIOLOGICALLY INSPIRED: the compact LIF runtime and decoder in `game/brain.worker.js`.
-- GAME FICTION: NeuroSignal English words, nectar, human hunting, combat, and social game rules.
 
-This build does not claim to simulate the complete FlyWire/BANC connectome.
+The neural controller is a compact LIF-style, biologically inspired game model. The game does not claim to simulate the complete FlyWire/BANC connectome.
 
-## Files
-```text
-index.html
-api/npc.js
-backend/main.py
-backend/__init__.py
-game/main.js
-game/brain.js
-game/brain.worker.js
-game/multiplayer.js
-game/voice.js
-game/npc.js
-game/ads.js
-public/robots.txt
-public/sitemap.xml
-manifest.webmanifest
-render.yaml
-vercel.json
-requirements.txt
-```
+## Project files
 
-## Deployment flow
-Preferred: Vercel serves the UI and `/api/npc`; Render runs the WebSocket multiplayer/voice signaling service and optional `/api/npc` fallback. In the game Settings, set the Render URL to your `https://...onrender.com` service.
+`backend/main.py` — FastAPI + WebSocket backend  
+`game/main.js` — browser game and renderer  
+`game/brain.worker.js` — compact neural simulation  
+`game/multiplayer.js` — room/state client  
+`game/voice.js` — WebRTC client  
+`game/npc.js` — NPC planning client with fallback  
+`game/ads.js` — optional ad/reward hook  
