@@ -12,6 +12,7 @@ function seedFromString(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=s
 function mulberry32(seed){return function(){let t=seed+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
 
 let playerName=localStorage.getItem('fm_name')||'';
+const localPlayerSalt=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36));
 let settings={mouse:+localStorage.getItem('fm_mouse')||5,touch:+localStorage.getItem('fm_touch')||5,vol:+localStorage.getItem('fm_vol')||5,crt:localStorage.getItem('fm_crt')!=='0',tts:localStorage.getItem('fm_tts')!=='0'};
 let running=false,paused=false,last=performance.now(),time=0,best=+(localStorage.getItem('fm_best')||0),brainAcc=0;
 let nectar=0,energy=80,hp=100,score=0,signal='EXPLORE',lastSpoken=0;
@@ -61,9 +62,12 @@ function joinMulti(){
 function setupWorld(roomCode=''){
  time=0;brainAcc=0;nectar=0;energy=100;hp=100;score=0;signal='EXPLORE';lastSpoken=0;
  worldR=multiplayer&&roomCode?mulberry32(seedFromString(roomCode)):R;
- const base=multiplayer&&roomCode?{x:-70,z:-70}: {x:0,z:0};
+ const spawnR=multiplayer&&roomCode?mulberry32(seedFromString(roomCode+'|PLAYER|'+localPlayerSalt)):R;
+ const base=multiplayer&&roomCode?{x:Math.cos(spawnR()*TAU)*(18+spawnR()*22),z:Math.sin(spawnR()*TAU)*(18+spawnR()*22)}:{x:0,z:0};
  human={x:multiplayer&&roomCode?65:190,z:multiplayer&&roomCode?65:190,mode:'patrol',thought:'Searching...',target:null,miss:0,wait:0,hand:{x:200,y:55,z:190}};
- flies=[makeFly(0,true)];flies[0].x=base.x;flies[0].z=base.z;flies[0].y=16;for(let i=1;i<15;i++)flies.push(makeFly(i,false));
+ flies=[makeFly(0,true)];flies[0].x=base.x;flies[0].z=base.z;flies[0].y=16;
+ if(multiplayer&&roomCode)flies[0].yaw=Math.atan2(-base.x,-base.z);
+ for(let i=1;i<15;i++)flies.push(makeFly(i,false));
  flowers=Array.from({length:34},()=>({x:worldR()*580-290,z:worldR()*580-290,h:12+worldR()*20,nectar:60+worldR()*40,c:worldR()}));
  wasps=Array.from({length:2},()=>({x:worldR()*500-250,z:worldR()*500-250,y:14,hp:100}));
  rocks=Array.from({length:90},()=>({x:worldR()*600-300,z:worldR()*600-300,r:2+worldR()*5}));
