@@ -1,6 +1,6 @@
 export class BrainClient {
   constructor() {
-    this.worker = new Worker('/game/brain.worker.js', {type:'module'});
+    this.worker = new Worker('/game/brain.worker.js?v=20261001-final', {type:'module'});
     this.outputs = new Map();
     this.worker.onmessage = e => {
       if (e.data?.type !== 'brain') return;
