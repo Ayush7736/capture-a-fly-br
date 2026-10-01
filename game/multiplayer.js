@@ -20,13 +20,13 @@ export class Multiplayer {
     return true;
   }
   handle(raw){let m;try{m=JSON.parse(raw)}catch{return}
-    if(m.type==='welcome'){for(const p of m.peers||[])if(p.id!==this.id)this.peers.set(p.id,{...p,state:null});this.onEvent(m);return;}
-    if(m.type==='peer-joined'){this.peers.set(m.peer.id,{...m.peer,state:null});this.onEvent(m);return;}
+    if(m.type==='welcome'){this.room=m.room||this.room;this.peers.clear();for(const p of m.peers||[])if(p.id!==this.id)this.peers.set(p.id,{...p,state:null});this.onStatus('ONLINE • '+(this.peers.size+1)+'/8 • ROOM '+this.room);this.onEvent(m);return;}
+    if(m.type==='peer-joined'){this.peers.set(m.peer.id,{...m.peer,state:null});this.onStatus('ONLINE • '+(this.peers.size+1)+'/8 • ROOM '+this.room);this.onEvent(m);return;}
     if(m.type==='peer-left'){this.peers.delete(m.id);this.onEvent(m);return;}
     if(m.type==='state'){const p=this.peers.get(m.from)||{id:m.from,name:'Fly',state:null};p.state=m.state;this.peers.set(m.from,p);this.onEvent({type:'remote-state',peer:p});return;}
     if(m.type==='signal'||m.type==='voice'||m.type==='chat'){this.onEvent(m);return;}
     if(m.type==='pong')return;
-    if(m.type==='error')this.onStatus(m.message||'ROOM ERROR');
+    if(m.type==='error'){this.manualClose=true;this.connected=false;this.onStatus(m.message||'ROOM ERROR');try{this.ws?.close()}catch{}}
   }
   send(m){if(this.ws?.readyState===WebSocket.OPEN)this.ws.send(JSON.stringify(m));}
   state(s,now){if(now-this.lastSend<100)return;this.lastSend=now;this.send({type:'state',state:s});}
