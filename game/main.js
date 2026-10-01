@@ -1,8 +1,8 @@
-import {BrainClient} from './brain.js';
-import {Multiplayer} from './multiplayer.js';
-import {VoiceChat} from './voice.js';
-import {planHuman} from './npc.js';
-import {showRewarded,rewardedCount,isAdFree,adConfig,maybeInterstitial} from './ads.js';
+import {BrainClient} from './brain.js?v=20261001-final';
+import {Multiplayer} from './multiplayer.js?v=20261001-final';
+import {VoiceChat} from './voice.js?v=20261001-final';
+import {planHuman} from './npc.js?v=20261001-final';
+import {showRewarded,rewardedCount,isAdFree,adConfig,maybeInterstitial} from './ads.js?v=20261001-final';
 
 const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
 canvas.width=320;canvas.height=180;
