@@ -7,6 +7,10 @@ import {showRewarded,rewardedCount,isAdFree,adConfig,maybeInterstitial} from './
 const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
 canvas.width=320;canvas.height=180;
 const W=320,H=180,TAU=Math.PI*2,R=Math.random,cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+let worldR=R;
+function seedFromString(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function mulberry32(seed){return function(){let t=seed+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
+
 let playerName=localStorage.getItem('fm_name')||'';
 let settings={mouse:+localStorage.getItem('fm_mouse')||5,touch:+localStorage.getItem('fm_touch')||5,vol:+localStorage.getItem('fm_vol')||5,crt:localStorage.getItem('fm_crt')!=='0',tts:localStorage.getItem('fm_tts')!=='0'};
 let running=false,paused=false,last=performance.now(),time=0,best=+(localStorage.getItem('fm_best')||0),brainAcc=0;
@@ -40,21 +44,32 @@ function setupMenu(){
 function saveSettings(){settings.mouse=+$('mouse').value;settings.touch=+$('touch').value;settings.vol=+$('vol').value;settings.crt=$('crt').checked;settings.tts=$('tts').checked;localStorage.setItem('fm_mouse',settings.mouse);localStorage.setItem('fm_touch',settings.touch);localStorage.setItem('fm_vol',settings.vol);localStorage.setItem('fm_crt',settings.crt?'1':'0');localStorage.setItem('fm_tts',settings.tts?'1':'0');applyCrt()}
 function applyCrt(){$('stage').classList.toggle('crt',settings.crt)}
 function randomRoom(){return 'FLY-'+Math.random().toString(36).slice(2,6).toUpperCase()}
-function start(isMulti){
+function start(isMulti,roomCode=''){
  if(multiplayer && !isMulti){mp.disconnect();voice.disable();}
- playerName=($('name').value||'Fly').trim().slice(0,16)||'Fly';localStorage.setItem('fm_name',playerName);multiplayer=isMulti;setupWorld();$('menu').classList.add('hidden');running=true;paused=false;last=performance.now();requestAnimationFrame(loop);
- if(isMulti){$('roomPanel').classList.remove('hidden');}else{$('roomPanel').classList.add('hidden');}
+ playerName=($('name').value||'Fly').trim().slice(0,16)||'Fly';localStorage.setItem('fm_name',playerName);multiplayer=isMulti;setupWorld(roomCode);$('menu').classList.add('hidden');running=true;paused=false;last=performance.now();$('gameover').classList.add('hidden');requestAnimationFrame(loop);
+ if(isMulti){$('roomPanel').classList.remove('hidden');setStatus('CONNECTING • ROOM '+roomCode);}else{$('roomPanel').classList.add('hidden');}
 }
 function openMulti(){$('multiModal').classList.remove('hidden');$('room').value=randomRoom();$('mpName').value=playerName}
 function closeMulti(){$('multiModal').classList.add('hidden')}
 function joinMulti(){
- const n=($('mpName').value||$('name').value||'Fly').trim().slice(0,16)||'Fly';const code=($('room').value||randomRoom()).trim().toUpperCase();playerName=n;$('name').value=n;localStorage.setItem('fm_name',n);$('multiModal').classList.add('hidden');start(true);setTimeout(()=>mp.connect(code,n),60);
+ const n=($('mpName').value||$('name').value||'Fly').trim().slice(0,16)||'Fly';
+ const code=($('room').value||'').trim().toUpperCase();
+ if(!/^[A-Z0-9-]{3,12}$/.test(code)){setStatus('ENTER A VALID ROOM CODE');return;}
+ playerName=n;$('name').value=n;localStorage.setItem('fm_name',n);$('multiModal').classList.add('hidden');
+ start(true,code);setTimeout(()=>mp.connect(code,n),60);
 }
-function setupWorld(){
- time=0;brainAcc=0;nectar=0;energy=100;hp=100;score=0;signal='EXPLORE';lastSpoken=0;human={x:190,z:190,mode:'patrol',thought:'Searching...',target:null,miss:0,wait:0,hand:{x:200,y:55,z:190}};
- flies=[makeFly(0,true)];flies[0].x=-70;flies[0].z=-70;flies[0].y=16;for(let i=1;i<15;i++)flies.push(makeFly(i,false));flowers=Array.from({length:34},()=>({x:R()*580-290,z:R()*580-290,h:12+R()*20,nectar:60+R()*40,c:R()}));wasps=Array.from({length:2},()=>({x:R()*500-250,z:R()*500-250,y:14,hp:100}));rocks=Array.from({length:90},()=>({x:R()*600-300,z:R()*600-300,r:2+R()*5}));brain.reset();brain.ensure(flies.map(f=>({id:f.id,personality:f.pers})));remote.clear();
+function setupWorld(roomCode=''){
+ time=0;brainAcc=0;nectar=0;energy=100;hp=100;score=0;signal='EXPLORE';lastSpoken=0;
+ worldR=multiplayer&&roomCode?mulberry32(seedFromString(roomCode)):R;
+ const base=multiplayer&&roomCode?{x:-70,z:-70}: {x:0,z:0};
+ human={x:multiplayer&&roomCode?65:190,z:multiplayer&&roomCode?65:190,mode:'patrol',thought:'Searching...',target:null,miss:0,wait:0,hand:{x:200,y:55,z:190}};
+ flies=[makeFly(0,true)];flies[0].x=base.x;flies[0].z=base.z;flies[0].y=16;for(let i=1;i<15;i++)flies.push(makeFly(i,false));
+ flowers=Array.from({length:34},()=>({x:worldR()*580-290,z:worldR()*580-290,h:12+worldR()*20,nectar:60+worldR()*40,c:worldR()}));
+ wasps=Array.from({length:2},()=>({x:worldR()*500-250,z:worldR()*500-250,y:14,hp:100}));
+ rocks=Array.from({length:90},()=>({x:worldR()*600-300,z:worldR()*600-300,r:2+worldR()*5}));
+ brain.reset();brain.ensure(flies.map(f=>({id:f.id,personality:f.pers})));remote.clear();
 }
-function makeFly(id,isP){const p=[{name:'cautious',gain:1.4,threshold:.9,aggression:.3,social:1,food:1},{name:'aggressive',gain:1,threshold:1,aggression:2,social:.6,food:1},{name:'social',gain:1,threshold:1,aggression:.6,social:2,food:1},{name:'curious',gain:.9,threshold:1.05,aggression:.7,social:.8,food:1.3},{name:'forager',gain:1,threshold:1,aggression:.5,social:.8,food:1.7}][id%5];return{id,pers:p,x:R()*520-260,z:R()*520-260,y:8+R()*15,yaw:R()*TAU,vx:0,vz:0,vy:0,energy:70+R()*20,hp:100,nectar:0,signal:'EXPLORE',feeding:0,isP}}
+function makeFly(id,isP){const p=[{name:'cautious',gain:1.4,threshold:.9,aggression:.3,social:1,food:1},{name:'aggressive',gain:1,threshold:1,aggression:2,social:.6,food:1},{name:'social',gain:1,threshold:1,aggression:.6,social:2,food:1},{name:'curious',gain:.9,threshold:1.05,aggression:.7,social:.8,food:1.3},{name:'forager',gain:1,threshold:1,aggression:.5,social:.8,food:1.7}][id%5];return{id,pers:p,x:worldR()*520-260,z:worldR()*520-260,y:8+worldR()*15,yaw:worldR()*TAU,vx:0,vz:0,vy:0,energy:70+worldR()*20,hp:100,nectar:0,signal:'EXPLORE',feeding:0,isP}}
 function sense(f){let leftThreat=0,rightThreat=0,humanThreat=0,hostile=0,foodLeft=0,foodRight=0,nearby=0,signalStrength=0;const dx=human.hand.x-f.x,dz=human.hand.z-f.z,d=Math.hypot(dx,dz);if(d<110){const b=angleDiff(Math.atan2(dx,dz),f.yaw);const lm=cl(1-d/110,0,1)*(human.mode==='swing'?2:.35)*f.pers.gain;if(b>0)rightThreat+=lm;else leftThreat+=lm;humanThreat+=lm}
  for(const w of wasps)if(w.hp>0){const wd=Math.hypot(w.x-f.x,w.z-f.z);if(wd<80)hostile+=cl(1-wd/80,0,1)}
  let bestD=130,best=null;for(const fl of flowers){if(fl.nectar<=2)continue;const dd=Math.hypot(fl.x-f.x,fl.z-f.z);if(dd<bestD){bestD=dd;best=fl}}
@@ -82,7 +97,11 @@ function applyHuman(j,t){const d=Math.hypot(t.x-human.x,t.z-human.z);if(j.intent
 function gameOver(){running=false;best=Math.max(best,time);localStorage.setItem('fm_best',best);const base=(window.FLYMIND_RENDER_URL||localStorage.getItem('fm_render_url')||'').trim().replace(/\/$/,'');fetch((base?base+'/api/best':'/api/best'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:time})}).catch(()=>{});$('gameover').classList.remove('hidden');$('overStats').textContent=`SURVIVED ${time|0}s  •  NECTAR ${nectar|0}  •  BEST ${best|0}s`;maybeInterstitial()}
 function syncMultiplayer(){const p=flies[0],now=performance.now();mp.state({name:playerName,x:p.x,y:p.y,z:p.z,yaw:p.yaw,signal:p.signal,hp:p.hp},now)}
 function onMP(m){if(m.type==='welcome'){for(const p of mp.peers.values())voice.onPeerJoined(p.id)}else if(m.type==='peer-joined')voice.onPeerJoined(m.peer.id);else if(m.type==='peer-left'){remote.delete(m.id);voice.onPeerLeft(m.id)}else if(m.type==='remote-state')remote.set(m.peer.id,m.peer.state);else if(m.type==='voice')voice.handle(m);else if(m.type==='chat')addChat(m.text,m.from);updatePlayersUI()}
-function updatePlayersUI(){$('players').textContent=[{name:playerName,me:true},...Array.from(mp.peers.values()).map(p=>({name:p.name}))].map(x=>x.me?'◆ '+x.name:'• '+x.name).join('\n')||'SOLO'}
+function updatePlayersUI(){
+ const peers=Array.from(mp.peers.values()).map(p=>({name:p.name}));
+ $('players').textContent=[{name:playerName,me:true},...peers].map(x=>x.me?'◆ '+x.name:'• '+x.name).join('\n')||'SOLO';
+ if(multiplayer)setStatus(mp.connected?`ONLINE • ${peers.length+1}/8 PLAYERS • ROOM ${mp.room}`:`CONNECTING • ROOM ${mp.room||'...'}`);
+}
 function addChat(text,from){const x=document.createElement('div');x.textContent=`${from||'FLY'}: ${text}`;$('chat').appendChild(x);while($('chat').children.length>5)$('chat').firstChild.remove()}
 function updateHUD(){$('hud').textContent=`${playerName}\nNECTAR ${nectar|0}   ENERGY ${energy|0}   HP ${hp|0}\nSIGNAL ${signal}\nNEARBY ${flies.filter(f=>f.id&&Math.hypot(f.x-flies[0].x,f.z-flies[0].z)<65).length}\nSURVIVED ${time|0}s   BEST ${best|0}s\n${multiplayer?'ROOM '+mp.room:'FIND NECTAR • AVOID THE NET'}`;$('brainStatus').textContent=`${signal}  |  brain worker 20Hz`;}
 function project(x,y,z){const p=flies[0],dx=x-p.x,dz=z-p.z,ca=Math.cos(p.yaw),sa=Math.sin(p.yaw),depth=dx*sa+dz*ca;if(depth<2)return null;const side=dx*ca-dz*sa;const s=150/depth;return{x:W/2+side*s,y:H*.46-(y-p.y)*s,s,depth}}
